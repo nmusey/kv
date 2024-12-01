@@ -2,14 +2,14 @@ use clap::{Parser, Subcommand};
 use sqlite::{Connection, State};
 use std::env;
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[command(version, about)]
 struct Args {
     #[command(subcommand)]
     command: Commands,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Debug)]
 enum Commands {
     #[command(alias = "g")]
     Get {
@@ -18,8 +18,15 @@ enum Commands {
         #[arg(long, short = 't')]
         time: bool,
     },
+
     #[command(alias = "s")]
-    Set { key: String, value: String },
+    Set { 
+        key: String, 
+
+        #[arg(num_args=1..)]
+        values: Vec<String>
+    },
+
     #[command(alias = "all", alias = "a")]
     History {
         key: String,
@@ -40,7 +47,7 @@ fn main() {
     let args = Args::parse();
     match args.command {
         Commands::Get { key, time } => get_key(&ctx, key, time),
-        Commands::Set { key, value } => set_key(&ctx, key, value),
+        Commands::Set { key, values } => set_key(&ctx, key, values),
         Commands::History { key, time } => get_history(&ctx, key, time),
     }
 }
@@ -79,8 +86,8 @@ fn get_key(ctx: &Context, key: String, time: bool) {
     print_values(query, ctx, time);
 }
 
-fn set_key(ctx: &Context, key: String, value: String) {
-    let query = format!("INSERT INTO kv(k, v) VALUES ('{}', '{}');", key, value);
+fn set_key(ctx: &Context, key: String, values: Vec<String>) {
+    let query = format!("INSERT INTO kv(k, v) VALUES ('{}', '{}');", key, values.join(" "));
     match ctx.conn.execute(query) {
         Err(e) => {
             println!("Could not insert key into database: {}", e)
