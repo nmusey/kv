@@ -1,33 +1,30 @@
 use clap::{Parser, Subcommand};
 use sqlite::{Connection, State};
+use std::env;
 
 #[derive(Parser)]
 #[command(version, about)]
 struct Args {
     #[command(subcommand)]
     command: Commands,
-
 }
 
 #[derive(Subcommand)]
 enum Commands {
-    #[command(alias="g")]
-    Get { 
+    #[command(alias = "g")]
+    Get {
         key: String,
 
-        #[arg(long, short='t')]
+        #[arg(long, short = 't')]
         time: bool,
     },
-    #[command(alias="s")]
-    Set { 
-        key: String, 
-        value: String 
-    },
-    #[command(alias="all", alias="a")]
-    History { 
+    #[command(alias = "s")]
+    Set { key: String, value: String },
+    #[command(alias = "all", alias = "a")]
+    History {
         key: String,
-        
-        #[arg(long, short='t')]
+
+        #[arg(long, short = 't')]
         time: bool,
     },
 }
@@ -41,7 +38,6 @@ fn main() {
     setup_tables(&ctx);
 
     let args = Args::parse();
-
     match args.command {
         Commands::Get { key, time } => get_key(&ctx, key, time),
         Commands::Set { key, value } => set_key(&ctx, key, value),
@@ -50,8 +46,13 @@ fn main() {
 }
 
 fn make_context() -> Context {
+    let db_file = match env::var("KV_PATH") {
+        Ok(path) => path,
+        Err(_) => "/tmp/kv.db".to_string(),
+    };
+
     return Context {
-        conn: sqlite::open("kv.db").expect("Could not open connection to database"),
+        conn: sqlite::open(db_file).expect("Could not open connection to database"),
     };
 }
 
@@ -75,18 +76,7 @@ fn get_key(ctx: &Context, key: String, time: bool) {
         key
     );
 
-    let mut prepared = ctx.conn.prepare(query).unwrap();
-    while let Ok(State::Row) = prepared.next()
-    {
-        let value = prepared.read::<String, _>("v").unwrap();
-        let created = prepared.read::<String, _>("created").unwrap();
-
-        if time {
-            println!("{} {}", created, value);
-        } else {
-            println!("{}", value);
-        }
-    }
+    print_values(query, ctx, time);
 }
 
 fn set_key(ctx: &Context, key: String, value: String) {
@@ -99,18 +89,24 @@ fn set_key(ctx: &Context, key: String, value: String) {
     }
 }
 
-fn get_history(ctx: &Context, key: String, time: bool) {
-    let query = format!("SELECT v, created FROM kv WHERE k='{}' ORDER BY created ASC;", key);
+fn get_history(ctx:  &Context, key: String, time: bool) {
+    let query = format!(
+        "SELECT v, created FROM kv WHERE k='{}' ORDER BY created ASC;",
+        key
+    );
+
+    print_values(query, ctx, time);
+}
+
+fn print_values(query: String, ctx: &Context, time: bool) {
     let mut prepared = ctx.conn.prepare(query).unwrap();
-    while let Ok(State::Row) = prepared.next()
-    {
+    while let Ok(State::Row) = prepared.next() {
         let value = prepared.read::<String, _>("v").unwrap();
         let created = prepared.read::<String, _>("created").unwrap();
 
-        if time {
-            println!("{} {}", created, value);
-        } else {
-            println!("{}", value);
+        match time {
+            true => println!("{} {}", created, value),
+            false => println!("{}", value)
         }
     }
 }
