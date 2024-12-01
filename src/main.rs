@@ -46,8 +46,13 @@ fn main() {
 }
 
 fn make_context() -> Context {
+    let db_file = match env::var("KV_PATH") {
+        Ok(path) => path,
+        Err(_) => "/tmp/kv.db".to_string(),
+    };
+
     return Context {
-        conn: sqlite::open("kv.db").expect("Could not open connection to database"),
+        conn: sqlite::open(db_file).expect("Could not open connection to database"),
     };
 }
 
@@ -71,18 +76,7 @@ fn get_key(ctx: &Context, key: String, time: bool) {
         key
     );
 
-    let mut prepared = ctx.conn.prepare(query).unwrap();
-    while let Ok(State::Row) = prepared.next()
-    {
-        let value = prepared.read::<String, _>("v").unwrap();
-        let created = prepared.read::<String, _>("created").unwrap();
-
-        if time {
-            println!("{} {}", created, value);
-        } else {
-            println!("{}", value);
-        }
-    }
+    print_values(query, ctx, time);
 }
 
 fn set_key(ctx: &Context, key: String, value: String) {
